@@ -55,5 +55,6 @@ next-env.d.ts
 /*.lnk
 
 # réglages locaux Claude Code
-/.claude/settings.local.json
-/.claude/*.lock
+/.claude/
+/AGENTS.md
+/CLAUDE.md
