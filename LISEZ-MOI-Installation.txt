@@ -1,0 +1,69 @@
+====================================================================
+  ACTIVITES ET EXCURSIONS - Installation sur un nouvel ordinateur
+====================================================================
+
+CE QU'IL FAUT FAIRE (une seule fois)
+------------------------------------
+
+1. Copier ce dossier en entier sur le nouvel ordinateur.
+   Evitez de le laisser dans un dossier synchronise OneDrive :
+   preferez par exemple  C:\Apps\Evo2
+
+2. Double-cliquer sur :   INSTALLER-SUR-CE-PC.bat
+
+3. Attendre la fin (3 a 10 minutes). Une connexion Internet est
+   necessaire pendant cette etape. Ne fermez pas la fenetre noire.
+
+L'installeur se charge de tout :
+   - il telecharge le moteur Node.js si l'ordinateur ne l'a pas ;
+   - il installe les composants de l'application ;
+   - il cree ou met a jour la base de donnees ;
+   - il compile l'application ;
+   - il place un raccourci "Activites et Excursions" sur le Bureau.
+
+
+UTILISATION AU QUOTIDIEN
+------------------------
+
+Double-cliquer sur le raccourci du Bureau, ou sur le fichier
+LANCER-Activites-Excursions.bat
+
+Le site s'ouvre tout seul dans le navigateur, a l'adresse
+http://localhost:3000
+
+Pour arreter l'application : fermer l'onglet du navigateur ne suffit
+pas. Il faut fermer le processus Node.js, ou simplement redemarrer
+l'ordinateur. L'application ne consomme presque rien en attente.
+
+
+LES DONNEES
+-----------
+
+Toutes les donnees (reservations, clients, activites) sont dans le
+fichier  dev.db  a la racine du dossier.
+
+- Sauvegarde : copier ce fichier dev.db suffit.
+- Le fichier n'est PAS partage entre les ordinateurs. Chaque PC a sa
+  propre base. Si deux personnes doivent travailler sur les memes
+  donnees en meme temps, il faut passer a un vrai serveur partage.
+
+
+EN CAS DE PROBLEME
+------------------
+
+"L'installation echoue au telechargement"
+   -> Verifier la connexion Internet, ou l'antivirus / pare-feu de
+      l'entreprise qui bloque nodejs.org. Relancer ensuite
+      INSTALLER-SUR-CE-PC.bat
+
+"Le navigateur affiche une page d'erreur"
+   -> Attendre 20 secondes puis rafraichir (touche F5). Le serveur
+      met quelques secondes a demarrer.
+
+"Le port 3000 est deja utilise"
+   -> Une autre copie de l'application tourne deja. Redemarrer
+      l'ordinateur puis relancer.
+
+Apres une modification du code de l'application, il faut relancer
+INSTALLER-SUR-CE-PC.bat (ou "npm run build") pour que les changements
+soient visibles : l'application tourne en mode compile.

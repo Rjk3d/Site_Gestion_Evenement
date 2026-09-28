@@ -1,0 +1,203 @@
+// Schéma relationnel - Gestion des activités de loisirs et excursions B2C
+// Remplace les fichiers Google Sheets : B2C_suivi_CA, B2C_récap_B2C, B2C_planning_excu, B2C_accrobranche
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ActivityType {
+  PARC // ex: Accrobranche - sessions récurrentes, capacité fixe par créneau
+  EXCURSION // ex: Grasse-Mougins, Antibes, St Paul de Vence, Atelier Parfum... - pax minimum requis
+}
+
+enum BookingStatus {
+  EN_ATTENTE
+  PAYE
+  ANNULE
+}
+
+// Modes de règlement observés dans les données existantes (CMP, ESP, CAR + variantes réelles)
+enum PaymentMethod {
+  CMP // Compte Membre (facturé sur le compte client)
+  ESP // Espèces
+  CB // Carte bancaire (inclut CB sans contact)
+  CAR // Carte cadeau / pass prépayé
+  GRATUIT // Offert
+  GO // Offert par un Gentil Organisateur / staff
+  AUTRE
+}
+
+model Activity {
+  id      String       @id @default(cuid())
+  nom     String // ex: "Accrobranche", "Excursion Grasse-Mougins", "Antibes", "St Paul de Vence"
+  type    ActivityType
+  actif   Boolean      @default(true)
+  couleur String       @default("#6366f1") // code couleur pour le calendrier (Module 2)
+
+  prixAdulte Decimal  @default(0)
+  // Tarif enfant si différent de l'adulte (ex: Accrobranche 16€ enfant / 22€ adulte).
+  // Laisser vide pour les activités à tarif unique (la plupart des excursions).
+  prixEnfant Decimal?
+
+  // Capacité par défaut d'une session ; peut être surchargée au niveau de la session.
+  capaciteParDefaut Int
+  // Pax minimum pour que la sortie soit maintenue (ex: excursions "Minimum 5 pax").
+  paxMinimum        Int?
+
+  // Faux pour les activités "selon disponibilité" (pas de jour de la semaine fixe :
+  // Atelier Parfum, Séminaire, Bateau...). Dans ce cas, la prise de réservation propose
+  // n'importe quelle date future (rien de grisé) avec une heure saisie librement,
+  // au lieu de dériver un rythme hebdomadaire à partir de l'historique des sessions.
+  recurrenceFixe Boolean @default(true)
+
+  description String?
+
+  // Créneaux hebdomadaires configurés (ex: mercredi 09:30-12:30). Utilisés pour
+  // proposer les dates/horaires à la réservation quand recurrenceFixe est vrai.
+  // S'il n'y en a aucun, on retombe sur l'ancien comportement : rythme déduit
+  // de l'historique des sessions.
+  slots ActivitySlot[]
+
+  sessions  Session[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([type])
+}
+
+// Créneau hebdomadaire récurrent d'une activité (configuration, pas une session réelle).
+// jourSemaine suit la convention JS getUTCDay() : 0 = dimanche .. 6 = samedi.
+model ActivitySlot {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  jourSemaine Int // 0 = dimanche .. 6 = samedi
+  heureDebut  String // format "HH:mm"
+  heureFin    String // format "HH:mm"
+
+  // Surcharge de capacité pour ce créneau ; si null, activity.capaciteParDefaut s'applique.
+  capacite Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([activityId])
+}
+
+model Staff {
+  id        String    @id @default(cuid())
+  nom       String
+  actif     Boolean   @default(true)
+  sessions  Session[]
+  createdAt DateTime  @default(now())
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  date       DateTime // jour de la session (heure ignorée, toujours minuit UTC)
+  heureDebut String // format "HH:mm", ex: "09:30"
+  heureFin   String // format "HH:mm", ex: "12:30"
+
+  staffId String?
+  staff   Staff?  @relation(fields: [staffId], references: [id])
+
+  // Surcharge de capacité pour ce créneau précis ; si null, on retombe sur activity.capaciteParDefaut
+  capaciteMax Int?
+
+  notes String?
+
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([date])
+  @@index([activityId, date])
+}
+
+// Une réservation correspond à un groupe (famille, amis...) inscrit sur une session.
+// Le statut ANNULE remplace la pratique historique des lignes de CA négatives :
+// une réservation annulée reste en base pour l'historique mais est exclue des
+// totaux du dashboard (CA, pax, fréquentation).
+model Booking {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Participant qui sert de contact principal du groupe (booking porteur du téléphone de contact)
+  clientPrincipalId String?      @unique
+  clientPrincipal   Participant? @relation("BookingClientPrincipal", fields: [clientPrincipalId], references: [id])
+
+  participants Participant[] @relation("BookingParticipants")
+
+  nombrePax       Int
+  statutReglement BookingStatus  @default(EN_ATTENTE)
+  modeReglement   PaymentMethod?
+  montantTotal    Decimal        @default(0)
+
+  // Supplément "prix libre" saisi à la réservation pour les prestations sur mesure
+  // (ex: privatisation, extra négocié). Déjà inclus dans montantTotal.
+  prixLibre Decimal?
+
+  // Jour où le règlement a été encaissé (passage du statut à PAYE), à minuit UTC comme
+  // toutes les dates. C'est cette date qui fait foi pour le suivi du CA — pas la date de
+  // la session (ex: excursion payée à la réservation, plusieurs jours avant la sortie).
+  // Null tant que la réservation est en attente ou annulée.
+  datePaiement DateTime?
+
+  notes String? // notes libres / to-do opérationnel (ex: "Passer en premiers car cirque 15h30")
+
+  checklist Checklist?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([statutReglement])
+}
+
+model Participant {
+  id     String @id @default(cuid())
+  nom    String
+  prenom String
+
+  // Âge au moment de la réservation (saisie rapide / donnée historique).
+  age     Int?
+  isAdult Boolean @default(false) // vrai si "Adulte" saisi sans âge précis
+
+  telephone      String?
+  presenceParent Boolean @default(false) // pertinent pour les mineurs
+
+  bookingId String
+  booking   Booking @relation("BookingParticipants", fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // Réservation dont ce participant est le contact principal (relation inverse, 0 ou 1)
+  principalDeBooking Booking? @relation("BookingClientPrincipal")
+
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([telephone])
+}
+
+// Checklist opérationnelle liée à la réservation (Module 4 - vue terrain).
+model Checklist {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  infosPhil     Boolean @default(false) // Infos transmises à Phil
+  infosGO       Boolean @default(false) // Infos transmises au(x) Gentil(s) Organisateur(s)
+  infosParents  Boolean @default(false) // Infos transmises aux parents (mineurs)
+  securiteOK    Boolean @default(false) // Consignes sécurité validées
+  infosPrestaOK Boolean @default(false) // Infos transmises au prestataire externe (excursions)
+
+  updatedAt DateTime @updatedAt
+}
