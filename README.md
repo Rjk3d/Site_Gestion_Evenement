@@ -34,8 +34,8 @@ Elle remplace les anciens fichiers Google Sheets (`suivi CA`, `récap B2C`, `pla
 Prérequis : **Node.js 20+**
 
 ```bash
-git clone https://github.com/<votre-compte>/<votre-repo>.git
-cd <votre-repo>
+git clone https://github.com/Rjk3d/Site_Gestion_Evenement.git
+cd <le-repo>
 cp .env.example .env        # DATABASE_URL="file:./dev.db"
 npm install                 # génère aussi le client Prisma
 npx prisma migrate deploy   # crée la base SQLite
